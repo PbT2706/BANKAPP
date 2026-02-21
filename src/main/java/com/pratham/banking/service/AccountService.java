@@ -3,6 +3,7 @@ package com.pratham.banking.service;
 import com.pratham.banking.dto.AccountResponse;
 import com.pratham.banking.dto.CreateAccountRequest;
 import com.pratham.banking.dto.DepositRequest;
+import com.pratham.banking.dto.TransactionResponse;
 import com.pratham.banking.dto.TransferRequest;
 import com.pratham.banking.dto.WithdrawRequest;
 import com.pratham.banking.entity.Account;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Service class for handling account-related business logic.
@@ -173,6 +175,17 @@ public class AccountService {
                 return mapToAccountResponse(savedSourceAccount);
         }
 
+        @Transactional(readOnly = true)
+        public List<TransactionResponse> getTransactionsByAccountId(Long accountId) {
+                accountRepository.findById(accountId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+
+                List<Transaction> transactions = transactionRepository.findByAccountId(accountId);
+                return transactions.stream()
+                                .map(this::mapToTransactionResponse)
+                                .toList();
+        }
+
     private AccountResponse mapToAccountResponse(Account account) {
         return AccountResponse.builder()
                 .id(account.getId())
@@ -181,4 +194,15 @@ public class AccountService {
                 .createdAt(account.getCreatedAt())
                 .build();
     }
+
+        private TransactionResponse mapToTransactionResponse(Transaction transaction) {
+                return TransactionResponse.builder()
+                                .id(transaction.getId())
+                                .fromAccountId(transaction.getFromAccountId())
+                                .toAccountId(transaction.getToAccountId())
+                                .amount(transaction.getAmount())
+                                .type(transaction.getType())
+                                .createdAt(transaction.getCreatedAt())
+                                .build();
+        }
 }

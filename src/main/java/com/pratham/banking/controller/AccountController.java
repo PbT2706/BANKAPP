@@ -4,6 +4,7 @@ import com.pratham.banking.dto.ApiResponse;
 import com.pratham.banking.dto.AccountResponse;
 import com.pratham.banking.dto.CreateAccountRequest;
 import com.pratham.banking.dto.DepositRequest;
+import com.pratham.banking.dto.TransactionResponse;
 import com.pratham.banking.dto.TransferRequest;
 import com.pratham.banking.dto.WithdrawRequest;
 import com.pratham.banking.service.AccountService;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * REST controller for account operations.
@@ -114,6 +117,22 @@ public class AccountController {
                 .success(true)
                 .message("Transfer successful")
                 .data(accountResponse)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/transactions")
+    @Operation(
+            summary = "Get account transactions",
+            description = "Fetches transaction history for the specified account."
+    )
+    public ResponseEntity<ApiResponse<List<TransactionResponse>>> getTransactionsByAccountId(@PathVariable Long id) {
+        List<TransactionResponse> transactions = accountService.getTransactionsByAccountId(id);
+        ApiResponse<List<TransactionResponse>> response = ApiResponse.<List<TransactionResponse>>builder()
+                .success(true)
+                .message("Transactions fetched successfully")
+                .data(transactions)
                 .build();
 
         return ResponseEntity.ok(response);
