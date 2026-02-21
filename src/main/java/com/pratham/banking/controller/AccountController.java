@@ -4,6 +4,7 @@ import com.pratham.banking.dto.ApiResponse;
 import com.pratham.banking.dto.AccountResponse;
 import com.pratham.banking.dto.CreateAccountRequest;
 import com.pratham.banking.dto.DepositRequest;
+import com.pratham.banking.dto.TransferRequest;
 import com.pratham.banking.dto.WithdrawRequest;
 import com.pratham.banking.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -101,4 +102,20 @@ public class AccountController {
 
         return ResponseEntity.ok(response);
         }
+
+    @PostMapping("/transfer")
+    @Operation(
+            summary = "Transfer money",
+            description = "Transfers money between two accounts."
+    )
+    public ResponseEntity<ApiResponse<AccountResponse>> transfer(@Valid @RequestBody TransferRequest request) {
+        AccountResponse accountResponse = accountService.transfer(request);
+        ApiResponse<AccountResponse> response = ApiResponse.<AccountResponse>builder()
+                .success(true)
+                .message("Transfer successful")
+                .data(accountResponse)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
 }

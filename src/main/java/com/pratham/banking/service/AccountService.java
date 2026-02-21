@@ -3,6 +3,7 @@ package com.pratham.banking.service;
 import com.pratham.banking.dto.AccountResponse;
 import com.pratham.banking.dto.CreateAccountRequest;
 import com.pratham.banking.dto.DepositRequest;
+import com.pratham.banking.dto.TransferRequest;
 import com.pratham.banking.dto.WithdrawRequest;
 import com.pratham.banking.entity.Account;
 import com.pratham.banking.entity.Transaction;
@@ -117,6 +118,60 @@ public class AccountService {
 
         return mapToAccountResponse(savedAccount);
     }
+
+        @Transactional
+        public AccountResponse transfer(TransferRequest request) {
+                Long fromAccountId = request.getFromAccountId();
+                Long toAccountId = request.getToAccountId();
+                BigDecimal amount = request.getAmount();
+
+                if (fromAccountId == null || toAccountId == null) {
+                        throw new IllegalArgumentException("Account IDs are required");
+                }
+
+                if (fromAccountId.equals(toAccountId)) {
+                        throw new IllegalArgumentException("Source and destination accounts must be different");
+                }
+
+                if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new IllegalArgumentException("Amount must be positive");
+                }
+
+                Long firstLockId = Math.min(fromAccountId, toAccountId);
+                Long secondLockId = Math.max(fromAccountId, toAccountId);
+
+                Account firstLockedAccount = accountRepository.findByIdForUpdate(firstLockId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+                Account secondLockedAccount = accountRepository.findByIdForUpdate(secondLockId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+
+                Account sourceAccount = fromAccountId.equals(firstLockedAccount.getId())
+                                ? firstLockedAccount
+                                : secondLockedAccount;
+                Account destinationAccount = toAccountId.equals(firstLockedAccount.getId())
+                                ? firstLockedAccount
+                                : secondLockedAccount;
+
+                if (sourceAccount.getBalance().compareTo(amount) < 0) {
+                        throw new IllegalStateException("Insufficient balance");
+                }
+
+                sourceAccount.setBalance(sourceAccount.getBalance().subtract(amount));
+                destinationAccount.setBalance(destinationAccount.getBalance().add(amount));
+
+                Account savedSourceAccount = accountRepository.save(sourceAccount);
+                accountRepository.save(destinationAccount);
+
+                Transaction transaction = Transaction.builder()
+                                .fromAccountId(fromAccountId)
+                                .toAccountId(toAccountId)
+                                .amount(amount)
+                                .type(TransactionType.TRANSFER)
+                                .build();
+                transactionRepository.save(transaction);
+
+                return mapToAccountResponse(savedSourceAccount);
+        }
 
     private AccountResponse mapToAccountResponse(Account account) {
         return AccountResponse.builder()
