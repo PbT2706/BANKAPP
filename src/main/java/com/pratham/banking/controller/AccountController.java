@@ -3,6 +3,7 @@ package com.pratham.banking.controller;
 import com.pratham.banking.dto.ApiResponse;
 import com.pratham.banking.dto.AccountResponse;
 import com.pratham.banking.dto.CreateAccountRequest;
+import com.pratham.banking.dto.DepositRequest;
 import com.pratham.banking.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -61,4 +62,23 @@ public class AccountController {
 
         return ResponseEntity.ok(response);
     }
+
+        @PostMapping("/{id}/deposit")
+        @Operation(
+            summary = "Deposit money",
+            description = "Deposits money into the specified account."
+        )
+        public ResponseEntity<ApiResponse<AccountResponse>> deposit(
+            @PathVariable Long id,
+            @Valid @RequestBody DepositRequest request
+        ) {
+        AccountResponse accountResponse = accountService.deposit(id, request);
+        ApiResponse<AccountResponse> response = ApiResponse.<AccountResponse>builder()
+            .success(true)
+            .message("Deposit successful")
+            .data(accountResponse)
+            .build();
+
+        return ResponseEntity.ok(response);
+        }
 }
