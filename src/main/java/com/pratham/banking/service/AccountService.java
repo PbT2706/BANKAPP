@@ -3,6 +3,7 @@ package com.pratham.banking.service;
 import com.pratham.banking.dto.AccountResponse;
 import com.pratham.banking.dto.CreateAccountRequest;
 import com.pratham.banking.dto.DepositRequest;
+import com.pratham.banking.dto.WithdrawRequest;
 import com.pratham.banking.entity.Account;
 import com.pratham.banking.entity.Transaction;
 import com.pratham.banking.entity.TransactionType;
@@ -86,11 +87,43 @@ public class AccountService {
                 .build();
         transactionRepository.save(transaction);
 
+        return mapToAccountResponse(savedAccount);
+    }
+
+    @Transactional
+    public AccountResponse withdraw(Long accountId, WithdrawRequest request) {
+        Account account = accountRepository.findByIdForUpdate(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+
+        BigDecimal amount = request.getAmount();
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Amount must be positive");
+        }
+
+        if (account.getBalance().compareTo(amount) < 0) {
+            throw new IllegalStateException("Insufficient balance");
+        }
+
+        account.setBalance(account.getBalance().subtract(amount));
+        Account savedAccount = accountRepository.save(account);
+
+        Transaction transaction = Transaction.builder()
+                .fromAccountId(accountId)
+                .toAccountId(null)
+                .amount(amount)
+                .type(TransactionType.WITHDRAW)
+                .build();
+        transactionRepository.save(transaction);
+
+        return mapToAccountResponse(savedAccount);
+    }
+
+    private AccountResponse mapToAccountResponse(Account account) {
         return AccountResponse.builder()
-                .id(savedAccount.getId())
-                .userId(savedAccount.getUser().getId())
-                .balance(savedAccount.getBalance())
-                .createdAt(savedAccount.getCreatedAt())
+                .id(account.getId())
+                .userId(account.getUser().getId())
+                .balance(account.getBalance())
+                .createdAt(account.getCreatedAt())
                 .build();
     }
 }

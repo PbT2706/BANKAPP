@@ -4,6 +4,7 @@ import com.pratham.banking.dto.ApiResponse;
 import com.pratham.banking.dto.AccountResponse;
 import com.pratham.banking.dto.CreateAccountRequest;
 import com.pratham.banking.dto.DepositRequest;
+import com.pratham.banking.dto.WithdrawRequest;
 import com.pratham.banking.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -76,6 +77,25 @@ public class AccountController {
         ApiResponse<AccountResponse> response = ApiResponse.<AccountResponse>builder()
             .success(true)
             .message("Deposit successful")
+            .data(accountResponse)
+            .build();
+
+        return ResponseEntity.ok(response);
+        }
+
+        @PostMapping("/{id}/withdraw")
+        @Operation(
+            summary = "Withdraw money",
+            description = "Withdraws money from the specified account."
+        )
+        public ResponseEntity<ApiResponse<AccountResponse>> withdraw(
+            @PathVariable Long id,
+            @Valid @RequestBody WithdrawRequest request
+        ) {
+        AccountResponse accountResponse = accountService.withdraw(id, request);
+        ApiResponse<AccountResponse> response = ApiResponse.<AccountResponse>builder()
+            .success(true)
+            .message("Withdrawal successful")
             .data(accountResponse)
             .build();
 
