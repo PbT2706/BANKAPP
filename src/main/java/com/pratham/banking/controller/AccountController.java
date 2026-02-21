@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -42,5 +44,21 @@ public class AccountController {
                 .build();
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{id}")
+    @Operation(
+            summary = "Get account by ID",
+            description = "Fetches account details for the provided account ID."
+    )
+    public ResponseEntity<ApiResponse<AccountResponse>> getAccountById(@PathVariable Long id) {
+        AccountResponse accountResponse = accountService.getAccountById(id);
+        ApiResponse<AccountResponse> response = ApiResponse.<AccountResponse>builder()
+                .success(true)
+                .message("Account fetched successfully")
+                .data(accountResponse)
+                .build();
+
+        return ResponseEntity.ok(response);
     }
 }

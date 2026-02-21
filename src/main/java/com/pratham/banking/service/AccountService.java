@@ -45,4 +45,16 @@ public class AccountService {
                 .createdAt(savedAccount.getCreatedAt())
                 .build();
     }
+
+    public AccountResponse getAccountById(Long accountId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+
+        return AccountResponse.builder()
+                .id(account.getId())
+                .userId(account.getUser().getId())
+                .balance(account.getBalance())
+                .createdAt(account.getCreatedAt())
+                .build();
+    }
 }
