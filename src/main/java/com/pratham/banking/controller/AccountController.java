@@ -1,5 +1,7 @@
 package com.pratham.banking.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pratham.banking.dto.ApiResponse;
 import com.pratham.banking.dto.AccountResponse;
 import com.pratham.banking.dto.CreateAccountRequest;
@@ -17,9 +19,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 
 /**
@@ -31,9 +38,11 @@ import java.util.List;
 public class AccountController {
 
     private final AccountService accountService;
+    private final ObjectMapper objectMapper;
 
-    public AccountController(AccountService accountService) {
+    public AccountController(AccountService accountService, ObjectMapper objectMapper) {
         this.accountService = accountService;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping
@@ -111,8 +120,16 @@ public class AccountController {
             summary = "Transfer money",
             description = "Transfers money between two accounts."
     )
-    public ResponseEntity<ApiResponse<AccountResponse>> transfer(@Valid @RequestBody TransferRequest request) {
-        AccountResponse accountResponse = accountService.transfer(request);
+    public ResponseEntity<ApiResponse<AccountResponse>> transfer(
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody TransferRequest request
+    ) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new IllegalArgumentException("Idempotency-Key header is required");
+        }
+
+        String requestHash = computeRequestHash(request);
+        AccountResponse accountResponse = accountService.transfer(idempotencyKey, requestHash, request);
         ApiResponse<AccountResponse> response = ApiResponse.<AccountResponse>builder()
                 .success(true)
                 .message("Transfer successful")
@@ -136,5 +153,16 @@ public class AccountController {
                 .build();
 
         return ResponseEntity.ok(response);
+    }
+
+    private String computeRequestHash(TransferRequest request) {
+        try {
+            String requestJson = objectMapper.writeValueAsString(request);
+            MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+            byte[] digest = messageDigest.digest(requestJson.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (JsonProcessingException | NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("Failed to compute transfer request hash", ex);
+        }
     }
 }

@@ -10,6 +10,8 @@ import com.pratham.banking.entity.Account;
 import com.pratham.banking.entity.Transaction;
 import com.pratham.banking.entity.TransactionType;
 import com.pratham.banking.entity.User;
+import com.pratham.banking.exception.InsufficientBalanceException;
+import com.pratham.banking.exception.InvalidTransferException;
 import com.pratham.banking.exception.ResourceNotFoundException;
 import com.pratham.banking.repository.AccountRepository;
 import com.pratham.banking.repository.TransactionRepository;
@@ -29,15 +31,18 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
         private final TransactionRepository transactionRepository;
+        private final IdempotencyService idempotencyService;
 
         public AccountService(
                         AccountRepository accountRepository,
                         UserRepository userRepository,
-                        TransactionRepository transactionRepository
+                        TransactionRepository transactionRepository,
+                        IdempotencyService idempotencyService
         ) {
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
                 this.transactionRepository = transactionRepository;
+                this.idempotencyService = idempotencyService;
     }
 
     @Transactional
@@ -122,69 +127,82 @@ public class AccountService {
     }
 
         @Transactional
-        public AccountResponse transfer(TransferRequest request) {
-                Long fromAccountId = request.getFromAccountId();
-                Long toAccountId = request.getToAccountId();
-                BigDecimal amount = request.getAmount();
+        public AccountResponse transfer(String idempotencyKey, String requestHash, TransferRequest request) {
+        return idempotencyService.execute(
+                idempotencyKey,
+                requestHash,
+                () -> transferInternal(request)
+        );
+    }
 
-                if (fromAccountId == null || toAccountId == null) {
-                        throw new IllegalArgumentException("Account IDs are required");
-                }
+    @Transactional
+    public AccountResponse transfer(TransferRequest request) {
+        return transferInternal(request);
+    }
 
-                if (fromAccountId.equals(toAccountId)) {
-                        throw new IllegalArgumentException("Source and destination accounts must be different");
-                }
+    private AccountResponse transferInternal(TransferRequest request) {
+        Long fromAccountId = request.getFromAccountId();
+        Long toAccountId = request.getToAccountId();
+        BigDecimal amount = request.getAmount();
 
-                if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-                        throw new IllegalArgumentException("Amount must be positive");
-                }
-
-                Long firstLockId = Math.min(fromAccountId, toAccountId);
-                Long secondLockId = Math.max(fromAccountId, toAccountId);
-
-                Account firstLockedAccount = accountRepository.findByIdForUpdate(firstLockId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
-                Account secondLockedAccount = accountRepository.findByIdForUpdate(secondLockId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
-
-                Account sourceAccount = fromAccountId.equals(firstLockedAccount.getId())
-                                ? firstLockedAccount
-                                : secondLockedAccount;
-                Account destinationAccount = toAccountId.equals(firstLockedAccount.getId())
-                                ? firstLockedAccount
-                                : secondLockedAccount;
-
-                if (sourceAccount.getBalance().compareTo(amount) < 0) {
-                        throw new IllegalStateException("Insufficient balance");
-                }
-
-                sourceAccount.setBalance(sourceAccount.getBalance().subtract(amount));
-                destinationAccount.setBalance(destinationAccount.getBalance().add(amount));
-
-                Account savedSourceAccount = accountRepository.save(sourceAccount);
-                accountRepository.save(destinationAccount);
-
-                Transaction transaction = Transaction.builder()
-                                .fromAccountId(fromAccountId)
-                                .toAccountId(toAccountId)
-                                .amount(amount)
-                                .type(TransactionType.TRANSFER)
-                                .build();
-                transactionRepository.save(transaction);
-
-                return mapToAccountResponse(savedSourceAccount);
+        if (fromAccountId == null || toAccountId == null) {
+                        throw new InvalidTransferException("Account IDs are required");
         }
 
-        @Transactional(readOnly = true)
-        public List<TransactionResponse> getTransactionsByAccountId(Long accountId) {
-                accountRepository.findById(accountId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
-
-                List<Transaction> transactions = transactionRepository.findByAccountId(accountId);
-                return transactions.stream()
-                                .map(this::mapToTransactionResponse)
-                                .toList();
+        if (fromAccountId.equals(toAccountId)) {
+                        throw new InvalidTransferException("Source and destination accounts must be different");
         }
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new InvalidTransferException("Amount must be positive");
+        }
+
+        Long firstLockId = Math.min(fromAccountId, toAccountId);
+        Long secondLockId = Math.max(fromAccountId, toAccountId);
+
+        Account firstLockedAccount = accountRepository.findByIdForUpdate(firstLockId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        Account secondLockedAccount = accountRepository.findByIdForUpdate(secondLockId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+
+        Account sourceAccount = fromAccountId.equals(firstLockedAccount.getId())
+                ? firstLockedAccount
+                : secondLockedAccount;
+        Account destinationAccount = toAccountId.equals(firstLockedAccount.getId())
+                ? firstLockedAccount
+                : secondLockedAccount;
+
+        if (sourceAccount.getBalance().compareTo(amount) < 0) {
+                        throw new InsufficientBalanceException("Insufficient balance");
+        }
+
+        sourceAccount.setBalance(sourceAccount.getBalance().subtract(amount));
+        destinationAccount.setBalance(destinationAccount.getBalance().add(amount));
+
+        Account savedSourceAccount = accountRepository.save(sourceAccount);
+        accountRepository.save(destinationAccount);
+
+        Transaction transaction = Transaction.builder()
+                .fromAccountId(fromAccountId)
+                .toAccountId(toAccountId)
+                .amount(amount)
+                .type(TransactionType.TRANSFER)
+                .build();
+        transactionRepository.save(transaction);
+
+        return mapToAccountResponse(savedSourceAccount);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponse> getTransactionsByAccountId(Long accountId) {
+        accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+
+        List<Transaction> transactions = transactionRepository.findByAccountId(accountId);
+        return transactions.stream()
+                .map(this::mapToTransactionResponse)
+                .toList();
+    }
 
     private AccountResponse mapToAccountResponse(Account account) {
         return AccountResponse.builder()
