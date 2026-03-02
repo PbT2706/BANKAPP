@@ -204,6 +204,24 @@ public class AccountService {
                 .toList();
     }
 
+        @Transactional(readOnly = true)
+        public boolean isAccountOwner(Long accountId, String username) {
+                if (accountId == null || username == null || username.isBlank()) {
+                        return false;
+                }
+                return accountRepository.existsByIdAndUser_Username(accountId, username);
+        }
+
+        @Transactional(readOnly = true)
+        public boolean isCurrentUserId(Long userId, String username) {
+                if (userId == null || username == null || username.isBlank()) {
+                        return false;
+                }
+                return userRepository.findById(userId)
+                                .map(user -> user.getUsername().equals(username))
+                                .orElse(false);
+        }
+
     private AccountResponse mapToAccountResponse(Account account) {
         return AccountResponse.builder()
                 .id(account.getId())

@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,6 +47,7 @@ public class AccountController {
     }
 
     @PostMapping
+        @PreAuthorize("hasRole('USER') and @accountService.isCurrentUserId(#request.userId, authentication.name)")
     @Operation(
             summary = "Create account",
             description = "Creates a new bank account for an existing user with zero initial balance."
@@ -62,6 +64,7 @@ public class AccountController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or @accountService.isAccountOwner(#id, authentication.name)")
     @Operation(
             summary = "Get account by ID",
             description = "Fetches account details for the provided account ID."
@@ -78,6 +81,7 @@ public class AccountController {
     }
 
         @PostMapping("/{id}/deposit")
+        @PreAuthorize("hasRole('USER') and @accountService.isAccountOwner(#id, authentication.name)")
         @Operation(
             summary = "Deposit money",
             description = "Deposits money into the specified account."
@@ -97,6 +101,7 @@ public class AccountController {
         }
 
         @PostMapping("/{id}/withdraw")
+        @PreAuthorize("hasRole('USER') and @accountService.isAccountOwner(#id, authentication.name)")
         @Operation(
             summary = "Withdraw money",
             description = "Withdraws money from the specified account."
@@ -116,6 +121,7 @@ public class AccountController {
         }
 
     @PostMapping("/transfer")
+    @PreAuthorize("hasRole('USER') and @accountService.isAccountOwner(#request.fromAccountId, authentication.name)")
     @Operation(
             summary = "Transfer money",
             description = "Transfers money between two accounts."
@@ -140,6 +146,7 @@ public class AccountController {
     }
 
     @GetMapping("/{id}/transactions")
+    @PreAuthorize("hasRole('ADMIN') or @accountService.isAccountOwner(#id, authentication.name)")
     @Operation(
             summary = "Get account transactions",
             description = "Fetches transaction history for the specified account."

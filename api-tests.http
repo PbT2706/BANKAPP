@@ -1,0 +1,165 @@
+### Banking API full test collection (VS Code REST Client)
+### Prerequisite: start app (`./mvnw spring-boot:run`) and PostgreSQL from application.properties
+### Optional extension: humao.rest-client
+
+@baseUrl = http://localhost:8080
+@runId = {{$timestamp}}
+@adminUsername = admin
+@adminPassword = admin123
+@user1Username = user1_{{runId}}
+@user1Password = user123
+@user2Username = user2_{{runId}}
+@user2Password = user123
+
+### 0) Register USER-1
+# @name registerUser1
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "{{user1Username}}",
+  "password": "{{user1Password}}"
+}
+
+### 1) Register USER-2
+# @name registerUser2
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "{{user2Username}}",
+  "password": "{{user2Password}}"
+}
+
+### 2) Login USER-1
+# @name loginUser1
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "user1_1772452410",
+  "password": "{{user1Password}}"
+}
+
+### 3) Login USER-2
+# @name loginUser2
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "user2_1772452434",
+  "password": "{{user2Password}}"
+}
+
+### 4) Login ADMIN (seeded via app.seed.admin.*)
+# @name loginAdmin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{adminPassword}}"
+}
+
+### Derived variables from previous responses
+@user1Id = {{registerUser1.response.body.$.data.id}}
+@user2Id = {{registerUser2.response.body.$.data.id}}
+@user1Token = {{loginUser1.response.body.$.data}}
+@user2Token = {{loginUser2.response.body.$.data}}
+@adminToken = {{loginAdmin.response.body.$.data}}
+
+### 5) USER-1 creates own account (should pass)
+# @name createUser1Account
+POST {{baseUrl}}/api/accounts
+Authorization: Bearer {{user1Token}}
+Content-Type: application/json
+
+{
+  "userId": {{user1Id}}
+}
+
+### 6) USER-2 creates own account (should pass)
+# @name createUser2Account
+POST {{baseUrl}}/api/accounts
+Authorization: Bearer {{user2Token}}
+Content-Type: application/json
+
+{
+  "userId": {{user2Id}}
+}
+
+### 7) ADMIN creates account (should fail 403 - admin is read-only for account posts)
+POST {{baseUrl}}/api/accounts
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "userId": {{user1Id}}
+}
+
+### Derived account IDs
+@user1AccountId = {{createUser1Account.response.body.$.data.id}}
+@user2AccountId = {{createUser2Account.response.body.$.data.id}}
+
+### 8) USER-1 deposit into own account (should pass)
+POST {{baseUrl}}/api/accounts/{{user1AccountId}}/deposit
+Authorization: Bearer {{user1Token}}
+Content-Type: application/json
+
+{
+  "amount": 1000
+}
+
+### 9) USER-1 withdraw from own account (should pass)
+POST {{baseUrl}}/api/accounts/{{user1AccountId}}/withdraw
+Authorization: Bearer {{user1Token}}
+Content-Type: application/json
+
+{
+  "amount": 200
+}
+
+### 10) USER-1 transfer to USER-2 account (should pass)
+POST {{baseUrl}}/api/accounts/transfer
+Authorization: Bearer {{user1Token}}
+Idempotency-Key: transfer-{{$guid}}
+Content-Type: application/json
+
+{
+  "fromAccountId": {{user1AccountId}},
+  "toAccountId": {{user2AccountId}},
+  "amount": 150
+}
+
+### 11) ADMIN deposit (should fail 403)
+POST {{baseUrl}}/api/accounts/{{user1AccountId}}/deposit
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "amount": 10
+}
+
+### 12) USER-1 fetch own account by ID (should pass)
+GET {{baseUrl}}/api/accounts/{{user1AccountId}}
+Authorization: Bearer {{user1Token}}
+
+### 13) USER-1 fetch USER-2 account by ID (should fail 403)
+GET {{baseUrl}}/api/accounts/{{user2AccountId}}
+Authorization: Bearer {{user1Token}}
+
+### 14) ADMIN fetch USER-1 account by ID (should pass)
+GET {{baseUrl}}/api/accounts/{{user1AccountId}}
+Authorization: Bearer {{adminToken}}
+
+### 15) USER-1 fetch own transactions (should pass)
+GET {{baseUrl}}/api/accounts/{{user1AccountId}}/transactions
+Authorization: Bearer {{user1Token}}
+
+### 16) USER-2 fetch USER-1 transactions (should fail 403)
+GET {{baseUrl}}/api/accounts/{{user1AccountId}}/transactions
+Authorization: Bearer {{user2Token}}
+
+### 17) ADMIN fetch USER-1 transactions (should pass)
+GET {{baseUrl}}/api/accounts/{{user1AccountId}}/transactions
+Authorization: Bearer {{adminToken}}
