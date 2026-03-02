@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: banking_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+
+  banking-app:
+    build: .
+    depends_on:
+      - postgres
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/banking_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: password
+      JWT_SECRET: VeryStrongJwtSecretKey123456789
+    ports:
+      - "8080:8080"
